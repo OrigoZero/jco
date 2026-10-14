@@ -2952,6 +2952,8 @@ impl AsyncTaskIntrinsic {
                     render_args.require_intrinsic(Intrinsic::PromiseWithResolversPonyfill);
                 let check_may_leave_fn = render_args
                     .require_intrinsic(Intrinsic::Component(ComponentIntrinsic::CheckMayLeave));
+                let with_global_current_task_meta_fn =
+                    render_args.require_intrinsic(Intrinsic::WithGlobalCurrentTaskMetaFn);
 
                 output.push_str(&format!(
                     r#"
@@ -3155,7 +3157,16 @@ impl AsyncTaskIntrinsic {
                                 {debug_log_fn}('[{lower_import_backwards_compat_fn}()] calling lowered import', {{ importFn, params }});
                                 if (createdTask) {{ await createdTask.enter(); }}
 
-                                const asyncRes = await importFn(...params);
+                                // The import runs a microtask after the guest called it, and
+                                // the global current-task register may name another task by
+                                // then, or none: another task's wrapper settling in between
+                                // clears it. The import reads its caller from that register
+                                // as it starts, so it starts under the task that called it.
+                                const asyncRes = await {with_global_current_task_meta_fn}({{
+                                    taskID: task.id(),
+                                    componentIdx: task.componentIdx(),
+                                    fn: () => importFn(...params),
+                                }});
                                 if (requiresManualAsyncResult) {{
                                     manualAsyncResult.resolve(subtask.getResult());
                                 }}

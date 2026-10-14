@@ -655,9 +655,13 @@ impl ComponentIntrinsic {
                                 // A synchronous call triggered by a release handler gets the
                                 // first opportunity to use the unlocked component.
                                 //
-                                // Its release will leave this queued handoff in place.
+                                // Its own release schedules the next handoff, so this one
+                                // ends here. Queueing it again would turn every microtask
+                                // checkpoint into another handoff attempt for as long as that
+                                // holder keeps the lock, and a holder whose slice waits on a
+                                // host promise that settles in a later task never gets that
+                                // task to run.
                                 if (this.#lockHolderTaskID !== null) {{
-                                    this.#scheduleLockHandoff();
                                     return;
                                 }}
                                 const next = this.#lockWaiters.shift();
